@@ -53,6 +53,18 @@ module.exports = TokenBucket
 
 
 /**
+ * Checks whether the bucket currently has at least N tokens of capacity,
+ * without consuming any tokens.
+ *
+ * @param {Number} tokens the number of tokens to check.
+ * @return {Boolean} true if capacity, false otherwise.
+ */
+TokenBucket.prototype.hasTokens = function hasTokens(tokens) {
+  return tokens <= this._fill();
+}
+
+
+/**
  * Fills the bucket with more tokens.
  *
  * Rather than do some whacky setTimeout() deal, we just approximate refilling

@@ -51,11 +51,30 @@ function Throttle(options) {
 }
 
 /**
- * Test a key for throttle status.
+ * Test a key for throttle status, consuming a token if available.
  * @param  {String}   key Throttle key to check.
  * @param  {Function} cb  Callback f(err, limited)
  */
 Throttle.prototype.rateLimit = function (key, cb) {
+  this._rateLimit(key, true, cb)
+}
+
+/**
+ * Checks if a key would be throttled, without consuming a token.
+ * @param  {String}   key Throttle key to check.
+ * @param  {Function} cb  Callback f(err, limited)
+ */
+Throttle.prototype.peekRateLimit = function (key, cb) {
+  this._rateLimit(key, false, cb)
+}
+
+/**
+ * Test a key for throttle status.
+ * @param  {String}   key     Throttle key to check.
+ * @param  {boolean}  consume Whether to consume a token or not.
+ * @param  {Function} cb      Callback f(err, limited)
+ */
+Throttle.prototype._rateLimit = function (key, consume, cb) {
   if (key === undefined || key === null) return cb()
   var self = this
 
@@ -91,8 +110,11 @@ Throttle.prototype.rateLimit = function (key, cb) {
       })
     }
 
-
-    var hasCapacity = bucket.consume(1)
+    if (consume) {
+      var hasCapacity = bucket.consume(1)
+    } else {
+      var hasCapacity = bucket.hasTokens(1)
+    }
 
     //console.log("Throttle(%s): num_tokens= %d -- throttled: %s", key, bucket.tokens, !hasCapacity)
 

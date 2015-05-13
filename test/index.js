@@ -11,7 +11,7 @@ test("Loaded", function (t) {
 })
 
 test("TokenBucket", function (t) {
-  t.plan(13)
+  t.plan(17)
   var bucket, copy
 
   bucket = TokenBucket({fillRate: 10, capacity: 10, window: 1000})
@@ -19,6 +19,9 @@ test("TokenBucket", function (t) {
 
   bucket = TokenBucket({fillRate: "0", capacity: "11", window: "1000"})
   t.equal(bucket.tokens, 11, "Type fixes stringified numbers")
+
+  t.ok(bucket.hasTokens(1), "hasTokens(1) is true for a bucket with tokens")
+  t.equal(bucket.tokens, 11, "hasTokens doesn't remove any tokens.")
 
   t.ok(bucket.consume(1), "We can consume one from a bucket with tokens")
   t.equal(bucket.tokens, 10, "We've removed a token.")
@@ -32,7 +35,9 @@ test("TokenBucket", function (t) {
   t.equal(copy.tokens, bucket.tokens, "tokens copied from raw object")
 
   bucket = TokenBucket({fillRate: 0, capacity: 1, window: 1000})
+  t.ok(bucket.hasTokens(1))
   t.ok(bucket.consume(1))
+  t.notOk(bucket.hasTokens(1), "No tokens left.")
   t.notOk(bucket.consume(1), "No tokens left to consume.")
 
   bucket = TokenBucket({fillRate: 10, capacity: 10, window: 1000})
@@ -44,6 +49,21 @@ test("TokenBucket", function (t) {
   }, 10)
 })
 
+/**
+ * Returns a rateLimit callback function that asserts that the rateLimit output
+ * (passed into the returned callback) matches some expected value.
+ * @param  {Object}   t              the "t" test object from tap
+ * @param  {boolean}  expected       expected output of rateLimit
+ * @param  {String}   failureMessage message to display in the assert on failure
+ * @return {Function} a callback to pass to rateLimit
+ */
+var expectLimited = function (t, expected, failureMessage) {
+  return function (err, limited) {
+    t.notOk(err)
+    t.equal(limited, expected, failureMessage)
+  }
+}
+
 test("Throttle", function (t) {
   t.plan(10)
 
@@ -52,24 +72,44 @@ test("Throttle", function (t) {
   while (i++ < 3) {
     // This is so much cleaner with setImmediate... *sigh 0.8.x*
     setTimeout(function () {
-      throttle.rateLimit("test", function (err, limited) {
-        t.notOk(err)
-        t.notOk(limited, "Not throttled yet")
-      })
+      throttle.rateLimit("test", expectLimited(t, false, "Not throttled yet"))
     }, i * 10)
   }
   setTimeout(function () {
-    throttle.rateLimit("test", function (err, limited) {
-      t.notOk(err)
-      t.ok(limited, "Should now be throttled.")
-    })
+    throttle.rateLimit("test", expectLimited(t, true,  "Should now be throttled."))
   }, 50)
   setTimeout(function () {
-    throttle.rateLimit("test", function (err, limited) {
-      t.notOk(err)
-      t.notOk(limited, "Throttle should be lifted.")
-    })
+    throttle.rateLimit("test", expectLimited(t, false, "Throttle should be lifted."))
   }, 400)
+})
+
+test("Throttle peekRateLimit", function (t) {
+  t.plan(14)
+
+  var throttle = Throttle({rate: 2})
+
+  var i = 0
+  setTimeout(function () {
+    throttle.rateLimit("test", expectLimited(t, false, "Not throttled yet (2 -> 1)"))
+  }, i++ * 10)
+  setTimeout(function () {
+    throttle.peekRateLimit("test", expectLimited(t, false, "Peek shouldn't affect rate limit"))
+  }, i++ * 10)
+  setTimeout(function () {
+    throttle.peekRateLimit("test", expectLimited(t, false, "Peek shouldn't affect rate limit"))
+  }, i++ * 10)
+  setTimeout(function () {
+    throttle.peekRateLimit("test", expectLimited(t, false, "Peek shouldn't affect rate limit"))
+  }, i++ * 10)
+  setTimeout(function () {
+    throttle.rateLimit("test", expectLimited(t, false, "Not throttled yet (1 -> 0)"))
+  }, i++ * 10)
+  setTimeout(function () {
+    throttle.peekRateLimit("test", expectLimited(t, true, "Should now be rate limited"))
+  }, i++ * 10)
+  setTimeout(function () {
+    throttle.rateLimit("test", expectLimited(t, true, "Should now be rate limited"))
+  }, i++ * 10)
 })
 
 test("Override", function (t) {
@@ -86,17 +126,13 @@ test("Override", function (t) {
   while (i++ < 3) {
     // This is so much cleaner with setImmediate... *sigh 0.8.x*
     setTimeout(function () {
-      throttle.rateLimit("test", function (err, limited) {
-        t.notOk(err)
-        t.notOk(limited, "Not throttled yet")
-      })
+      // rateLimit calls the callback with `undefined` as result if there's no rate limit set
+      throttle.rateLimit("test", expectLimited(t, undefined, "Not throttled yet"))
     }, i * 10)
   }
   setTimeout(function () {
-    throttle.rateLimit("test", function (err, limited) {
-      t.notOk(err)
-      t.notOk(limited, "This one never gets throttled.")
-    })
+    // rateLimit calls the callback with `undefined` as result if there's no rate limit set
+    throttle.rateLimit("test", expectLimited(t, undefined, "This one never gets throttled."))
   }, 50)
 })
 
@@ -114,17 +150,13 @@ test("Override rate only", function (t) {
   while (i++ < 3) {
     // This is so much cleaner with setImmediate... *sigh 0.8.x*
     setTimeout(function () {
-      throttle.rateLimit("test", function (err, limited) {
-        t.notOk(err)
-        t.notOk(limited, "Not throttled yet")
-      })
+      // rateLimit calls the callback with `undefined` as result if there's no rate limit set
+      throttle.rateLimit("test", expectLimited(t, undefined, "Not throttled yet"))
     }, i * 10)
   }
   setTimeout(function () {
-    throttle.rateLimit("test", function (err, limited) {
-      t.notOk(err)
-      t.notOk(limited, "This one never gets throttled.")
-    })
+    // rateLimit calls the callback with `undefined` as result if there's no rate limit set
+    throttle.rateLimit("test", expectLimited(t, undefined, "This one never gets throttled."))
   }, 50)
 })
 
@@ -136,23 +168,14 @@ test("Different throttle window", function (t) {
   while (i++ < 3) {
     // This is so much cleaner with setImmediate... *sigh 0.8.x*
     setTimeout(function () {
-      throttle.rateLimit("test", function (err, limited) {
-        t.notOk(err)
-        t.notOk(limited, "Not throttled yet")
-      })
+      throttle.rateLimit("test", expectLimited(t, false, "Not throttled yet"))
     }, i * 10)
   }
   setTimeout(function () {
-    throttle.rateLimit("test", function (err, limited) {
-      t.notOk(err)
-      t.ok(limited, "Should now be throttled.")
-    })
+    throttle.rateLimit("test", expectLimited(t, true, "Should now be throttled."))
   }, 50)
   setTimeout(function () {
-    throttle.rateLimit("test", function (err, limited) {
-      t.notOk(err)
-      t.notOk(limited, "Throttle should be lifted.")
-    })
+    throttle.rateLimit("test", expectLimited(t, false, "Throttle should be lifted."))
   }, 150)
 })
 
@@ -200,22 +223,13 @@ test("Different Token Table", function (t) {
   while (i++ < 3) {
     // This is so much cleaner with setImmediate... *sigh 0.8.x*
     setTimeout(function () {
-      throttle.rateLimit("test", function (err, limited) {
-        t.notOk(err)
-        t.notOk(limited, "Not throttled yet")
-      })
+      throttle.rateLimit("test", expectLimited(t, false, "Not throttled yet"))
     }, i * 10)
   }
   setTimeout(function () {
-    throttle.rateLimit("test", function (err, limited) {
-      t.notOk(err)
-      t.ok(limited, "Should now be throttled.")
-    })
+    throttle.rateLimit("test", expectLimited(t, true, "Should now be throttled."))
   }, 50)
   setTimeout(function () {
-    throttle.rateLimit("test", function (err, limited) {
-      t.notOk(err)
-      t.notOk(limited, "Throttle should be lifted.")
-    })
+    throttle.rateLimit("test", expectLimited(t, false, "Throttle should be lifted."))
   }, 150)
 })
