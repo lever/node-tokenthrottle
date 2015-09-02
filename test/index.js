@@ -1,4 +1,4 @@
-var test = require("tap").test
+var test = require("tape")
 
 var Throttle = require("../")
 var TokenBucket = require("../token_bucket")
@@ -232,4 +232,42 @@ test("Different Token Table", function (t) {
   setTimeout(function () {
     throttle.rateLimit("test", expectLimited(t, false, "Throttle should be lifted."))
   }, 150)
+})
+
+test("Two Throttle instances", function (t) {
+  t.plan(12)
+
+  var throttle1 = Throttle({rate: 3})
+  var throttle2 = Throttle({rate: 1})
+  var i = 0
+  // Test throttle2
+  // This is so much cleaner with setImmediate... *sigh 0.8.x*
+  setTimeout(function () {
+    throttle2.rateLimit("test", function (err, limited) {
+      t.notOk(err)
+      t.notOk(limited, "throttle2 not throttled yet")
+    })
+  }, 0)
+  setTimeout(function () {
+    throttle2.rateLimit("test", function (err, limited) {
+      t.notOk(err)
+      t.ok(limited, "throttle2 should now be throttled")
+    })
+  }, 10)
+  // Make sure throttle1 is independent of throttle2
+  while (i++ < 3) {
+    // This is so much cleaner with setImmediate... *sigh 0.8.x*
+    setTimeout(function () {
+      throttle1.rateLimit("test", function (err, limited) {
+        t.notOk(err)
+        t.notOk(limited, "throttle1 not throttled yet")
+      })
+    }, 20 + i)
+  }
+  setTimeout(function () {
+    throttle1.rateLimit("test", function (err, limited) {
+      t.notOk(err)
+      t.ok(limited, "throttle1 should now be throttled")
+    })
+  }, 50)
 })
